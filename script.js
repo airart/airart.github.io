@@ -108,21 +108,24 @@ ${question}
 
 function speak(text){
 
-    eye.className="eye speaking";
+    eye.className = "eye speaking";
 
-    statusText.innerText=
+    statusText.innerText =
     "Sto rispondendo...";
 
     const speech =
     new SpeechSynthesisUtterance(text);
 
-    speech.lang="it-IT";
+    speech.lang = "it-IT";
+    speech.rate = 0.95;
+    speech.pitch = 0.8;
+    speech.volume = 1;
 
-    speech.onend=function(){
+    speech.onend = function(){
 
-        eye.className="eye";
+        eye.className = "eye";
 
-        statusText.innerText=
+        statusText.innerText =
         "Sistema in attesa...";
     };
 
