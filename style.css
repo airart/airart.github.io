@@ -43,18 +43,23 @@ body{
     position:relative;
 }
 
-.eye::after{
-    content:"";
+.eye{
+    position:relative;
+    overflow:hidden;
+}
+
+.glare{
     position:absolute;
     width:60px;
     height:60px;
     border-radius:50%;
-    background:rgba(255,255,255,.8);
-
-    top:35px;
-    left:55px;
-
+    background:rgba(255,255,255,0.85);
     filter:blur(10px);
+
+    left:55px;
+    top:35px;
+
+    transition:transform 0.1s linear;
 }
 
 .listening{

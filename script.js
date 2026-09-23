@@ -2,6 +2,53 @@ const API_KEY = "AQ.Ab8RN6J_PQtm_YV0G5SoqmPW_ynvR9S1E_ApjGWeWw2mPBo_FQ";
 
 const eye = document.getElementById("eye");
 const statusText = document.getElementById("status");
+const glare = document.getElementById("glare");
+async function enableMotion(){
+
+    if(typeof DeviceOrientationEvent !== "undefined" &&
+       typeof DeviceOrientationEvent.requestPermission === "function"){
+
+        const permission =
+            await DeviceOrientationEvent.requestPermission();
+
+        if(permission === "granted"){
+
+            window.addEventListener(
+                "deviceorientation",
+                function(event){
+
+                    moveReflection(
+                        event.beta || 0,
+                        event.gamma || 0
+                    );
+
+                }
+            );
+        }
+
+    } else {
+
+        window.addEventListener(
+            "deviceorientation",
+            function(event){
+
+                moveReflection(
+                    event.beta || 0,
+                    event.gamma || 0
+                );
+
+            }
+        );
+    }
+}
+function moveReflection(beta, gamma){
+
+    const x = Math.max(-25, Math.min(25, gamma));
+    const y = Math.max(-25, Math.min(25, beta / 3));
+
+    glare.style.transform =
+        `translate(${x}px, ${y}px)`;
+}
 
 const SpeechRecognition =
 window.SpeechRecognition ||
