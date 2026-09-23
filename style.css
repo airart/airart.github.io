@@ -41,10 +41,6 @@ body{
         0 0 250px #aa0000;
 
     position:relative;
-}
-
-.eye{
-    position:relative;
     overflow:hidden;
 }
 
@@ -59,7 +55,7 @@ body{
     left:55px;
     top:35px;
 
-    transition:transform 0.1s linear;
+    transition:transform .1s linear;
 }
 
 .listening{
@@ -67,7 +63,7 @@ body{
 }
 
 .speaking{
-    animation:pulsefast 0.35s infinite;
+    animation:pulsefast .35s infinite;
 }
 
 @keyframes pulse{
@@ -85,7 +81,6 @@ body{
 h1{
     margin-top:30px;
     letter-spacing:8px;
-    color:#ffffff;
 }
 
 #status{
@@ -93,9 +88,16 @@ h1{
     color:#ff6666;
 }
 
+.controls{
+    display:flex;
+    justify-content:center;
+    gap:10px;
+    flex-wrap:wrap;
+}
+
 button{
-    margin-top:25px;
-    padding:12px 30px;
+    margin-top:20px;
+    padding:12px 25px;
     border:none;
     border-radius:10px;
     background:#900;

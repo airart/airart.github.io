@@ -3,63 +3,48 @@ const API_KEY = "AQ.Ab8RN6J_PQtm_YV0G5SoqmPW_ynvR9S1E_ApjGWeWw2mPBo_FQ";
 const eye = document.getElementById("eye");
 const statusText = document.getElementById("status");
 const glare = document.getElementById("glare");
-async function enableMotion(){
-
-    if(typeof DeviceOrientationEvent !== "undefined" &&
-       typeof DeviceOrientationEvent.requestPermission === "function"){
-
-        const permission =
-            await DeviceOrientationEvent.requestPermission();
-
-        if(permission === "granted"){
-
-            window.addEventListener(
-                "deviceorientation",
-                function(event){
-
-                    moveReflection(
-                        event.beta || 0,
-                        event.gamma || 0
-                    );
-
-                }
-            );
-        }
-
-    } else {
-
-        window.addEventListener(
-            "deviceorientation",
-            function(event){
-
-                moveReflection(
-                    event.beta || 0,
-                    event.gamma || 0
-                );
-
-            }
-        );
-    }
-}
-function moveReflection(beta, gamma){
-
-    const x = Math.max(-25, Math.min(25, gamma));
-    const y = Math.max(-25, Math.min(25, beta / 3));
-
-    glare.style.transform =
-        `translate(${x}px, ${y}px)`;
-}
 
 const SpeechRecognition =
 window.SpeechRecognition ||
 window.webkitSpeechRecognition;
 
-const recognition = new SpeechRecognition();
+let recognition = null;
 
-recognition.lang = "it-IT";
-recognition.continuous = false;
+if (SpeechRecognition) {
+
+    recognition = new SpeechRecognition();
+
+    recognition.lang = "it-IT";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onresult = function(event){
+
+        const text =
+        event.results[0][0].transcript;
+
+        askAI(text);
+    };
+
+    recognition.onerror = function(){
+
+        statusText.innerText =
+        "Microfono non disponibile";
+
+        eye.className = "eye";
+    };
+}
 
 function startListening(){
+
+    if(!recognition){
+
+        alert(
+        "Il riconoscimento vocale non è supportato da questo browser."
+        );
+
+        return;
+    }
 
     eye.className = "eye listening";
 
@@ -69,43 +54,34 @@ function startListening(){
     recognition.start();
 }
 
-recognition.onresult = function(event){
-
-    const text =
-    event.results[0][0].transcript;
-
-    askAI(text);
-};
-
-recognition.onerror=function(){
-
-    statusText.innerText =
-    "Errore microfono";
-
-    eye.className="eye";
-};
-
 function sendText(){
 
-    const text =
-    document.getElementById("userInput").value;
+    const txt =
+    document.getElementById("userInput");
 
-    askAI(text);
+    const question =
+    txt.value.trim();
+
+    if(question === "")
+        return;
+
+    txt.value = "";
+
+    askAI(question);
 }
 
 async function askAI(question){
 
     addMessage(question,"user");
 
-    eye.className="eye";
+    eye.className = "eye";
 
     statusText.innerText =
     "Sto elaborando...";
 
     try{
 
-        const response =
-        await fetch(
+        const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`,
         {
             method:"POST",
@@ -114,42 +90,46 @@ async function askAI(question){
             },
             body:JSON.stringify({
                 contents:[
-                {
-                    parts:[
                     {
-text:`
+                        parts:[
+                            {
+                                text:`
 Sei AIRART AI.
 
-Parla in italiano.
+Rispondi sempre in italiano.
 
-Sei un assistente professionale.
-
-Rispondi in modo chiaro e sintetico.
+Mantieni uno stile professionale.
 
 Domanda:
 ${question}
 `
-                    }]
-                }]
+                            }
+                        ]
+                    }
+                ]
             })
         });
 
         const data =
-        await response.json();
+            await response.json();
 
-        let answer =
-        data.candidates[0]
-        .content.parts[0].text;
+        const answer =
+            data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+            "Non sono riuscito a rispondere.";
 
         addMessage(answer,"ai");
 
         speak(answer);
 
-    }catch(error){
+    }
+    catch(error){
+
+        console.error(error);
 
         addMessage(
-        "Errore durante la connessione.",
-        "ai");
+            "Errore di connessione con l'AI.",
+            "ai"
+        );
     }
 }
 
@@ -182,97 +162,79 @@ function speak(text){
 function addMessage(text,type){
 
     const box =
-    document.getElementById("chatbox");
+        document.getElementById("chatbox");
 
     const div =
-    document.createElement("div");
+        document.createElement("div");
 
-    div.className=type;
-
-    div.innerHTML=text;
+    div.className = type;
+    div.textContent = text;
 
     box.appendChild(div);
 
-    box.scrollTop=box.scrollHeight;
+    box.scrollTop =
+        box.scrollHeight;
 }
-},
-body:JSON.stringify({
-contents:[
-{
-parts:[
-{
-text:`
-Sei AIRART AI.
- 
-Parla in italiano.
- 
-Sei un assistente professionale.
- 
-Rispondi in modo chiaro e sintetico.
- 
-Domanda:
-${question}
-`
-}]
-}]
-})
-});
- 
-const data =
-await response.json();
- 
-let answer =
-data.candidates[0]
-.content.parts[0].text;
- 
-addMessage(answer,"ai");
- 
-speak(answer);
- 
-}catch(error){
- 
-addMessage(
-"Errore durante la connessione.",
-"ai");
+
+function moveReflection(beta,gamma){
+
+    const x =
+    Math.max(-25,
+    Math.min(25,gamma));
+
+    const y =
+    Math.max(-25,
+    Math.min(25,beta/3));
+
+    glare.style.transform =
+    `translate(${x}px,${y}px)`;
 }
-}
- 
-function speak(text){
- 
-eye.className="eye speaking";
- 
-statusText.innerText=
-"Sto rispondendo...";
- 
-const speech =
-new SpeechSynthesisUtterance(text);
- 
-speech.lang="it-IT";
- 
-speech.onend=function(){
- 
-eye.className="eye";
- 
-statusText.innerText=
-"Sistema in attesa...";
-};
- 
-speechSynthesis.speak(speech);
-}
- 
-function addMessage(text,type){
- 
-const box =
-document.getElementById("chatbox");
- 
-const div =
-document.createElement("div");
- 
-div.className=type;
- 
-div.innerHTML=text;
- 
-box.appendChild(div);
- 
-box.scrollTop=box.scrollHeight;
+
+async function enableMotion(){
+
+    try{
+
+        if(
+            typeof DeviceOrientationEvent !== "undefined" &&
+            typeof DeviceOrientationEvent.requestPermission === "function"
+        ){
+
+            const permission =
+            await DeviceOrientationEvent.requestPermission();
+
+            if(permission === "granted"){
+
+                window.addEventListener(
+                    "deviceorientation",
+                    function(event){
+
+                        moveReflection(
+                            event.beta || 0,
+                            event.gamma || 0
+                        );
+
+                    }
+                );
+            }
+        }
+        else{
+
+            window.addEventListener(
+                "deviceorientation",
+                function(event){
+
+                    moveReflection(
+                        event.beta || 0,
+                        event.gamma || 0
+                    );
+
+                }
+            );
+        }
+
+    }
+    catch(err){
+
+        console.error(err);
+    }
 }
