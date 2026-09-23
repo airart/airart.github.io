@@ -44,6 +44,19 @@ body{
     overflow:hidden;
 }
 
+.eye::before{
+    content:"";
+    position:absolute;
+    inset:15%;
+    border-radius:50%;
+
+    background:
+      radial-gradient(circle,
+      rgba(255,255,255,.8) 0%,
+      rgba(255,0,0,.6) 25%,
+      rgba(255,0,0,0) 70%);
+}
+
 .glare{
     position:absolute;
     width:60px;
