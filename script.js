@@ -80,20 +80,19 @@ async function askAI(question){
     "Sto elaborando...";
 
     try{
-
         const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
-        {
-            method:"POST",
-            headers:{
-                "Content-Type":"application/json"
-            },
-            body:JSON.stringify({
-                contents:[
-                    {
-                        parts:[
-                            {
-                                text:`
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
+    {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            contents: [
+                {
+                    parts: [
+                        {
+                            text: `
 Sei AIRART AI.
 
 Rispondi sempre in italiano.
@@ -103,34 +102,44 @@ Mantieni uno stile professionale.
 Domanda:
 ${question}
 `
-                            }
-                        ]
-                    }
-                ]
-            })
-        });
+                        }
+                    ]
+                }
+            ]
+        })
+    }
+);
 
-        const data =
-            await response.json();
+console.log("STATUS:", response.status);
 
-        const answer =
-            data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-            "Non sono riuscito a rispondere.";
+const data = await response.json();
 
-        addMessage(answer,"ai");
+console.log("DATA:", data);
 
-        speak(answer);
+if (!response.ok) {
+    throw new Error(
+        data.error?.message ||
+        JSON.stringify(data)
+    );
+}
+
+const answer =
+    data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+    "Non sono riuscito a rispondere.";
+
+addMessage(answer, "ai");
+
+speak(answer);
 
     }
     catch(error){
 
-        console.error(error);
+    console.error(error);
 
-        addMessage(
-            "Errore di connessione con l'AI.",
-            "ai"
-        );
-    }
+    addMessage(
+        "Errore AI: " + error.message,
+        "ai"
+    );
 }
 
 function speak(text){
