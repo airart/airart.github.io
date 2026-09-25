@@ -1,4 +1,4 @@
-const API_KEY = "AQ.Ab8RN6J_PQtm_YV0G5SoqmPW_ynvR9S1E_ApjGWeWw2mPBo_FQ";
+const API_KEY = "AQ.Ab8RN6IuTArkLseFUISFtESUnMqjFrub1zZFRxuqO8qGH7Vi1Q";
 
 const eye = document.getElementById("eye");
 const statusText = document.getElementById("status");
