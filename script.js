@@ -191,4 +191,60 @@ function addMessage(text, type) {
 function moveReflection(beta, gamma) {
 
     const x =
-    
+        Math.max(-25,
+            Math.min(25, gamma));
+
+    const y =
+        Math.max(-25,
+            Math.min(25, beta / 3));
+
+    glare.style.transform =
+        `translate(${x}px,${y}px)`;
+}
+
+async function enableMotion() {
+
+    try {
+
+        if (
+            typeof DeviceOrientationEvent !== "undefined" &&
+            typeof DeviceOrientationEvent.requestPermission === "function"
+        ) {
+
+            const permission =
+                await DeviceOrientationEvent.requestPermission();
+
+            if (permission === "granted") {
+
+                window.addEventListener(
+                    "deviceorientation",
+                    function (event) {
+
+                        moveReflection(
+                            event.beta || 0,
+                            event.gamma || 0
+                        );
+                    }
+                );
+            }
+
+        } else {
+
+            window.addEventListener(
+                "deviceorientation",
+                function (event) {
+
+                    moveReflection(
+                        event.beta || 0,
+                        event.gamma || 0
+                    );
+                }
+            );
+        }
+
+    }
+    catch (err) {
+
+        console.error(err);
+    }
+}
