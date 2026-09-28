@@ -4,11 +4,61 @@ const eye = document.getElementById("eye");
 const statusText = document.getElementById("status");
 const glare = document.getElementById("glare");
 
+let MODEL_NAME = null;
+
 const SpeechRecognition =
     window.SpeechRecognition ||
     window.webkitSpeechRecognition;
 
 let recognition = null;
+
+/* --------------------------
+   CARICA ELENCO MODELLI
+--------------------------- */
+
+async function loadModel() {
+
+    try {
+
+        const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`
+        );
+
+        const data = await response.json();
+
+        console.log("MODELS:", data);
+
+        const model = data.models.find(m =>
+            m.supportedGenerationMethods &&
+            m.supportedGenerationMethods.includes("generateContent")
+        );
+
+        if (!model) {
+
+            throw new Error(
+                "Nessun modello compatibile trovato"
+            );
+        }
+
+        MODEL_NAME = model.name;
+
+        console.log(
+            "MODELLO SELEZIONATO:",
+            MODEL_NAME
+        );
+
+    } catch (err) {
+
+        console.error(err);
+
+        statusText.innerText =
+            "Errore caricamento modelli";
+    }
+}
+
+/* --------------------------
+   MICROFONO
+--------------------------- */
 
 if (SpeechRecognition) {
 
@@ -40,7 +90,7 @@ function startListening() {
     if (!recognition) {
 
         alert(
-            "Il riconoscimento vocale non è supportato da questo browser."
+            "Riconoscimento vocale non disponibile."
         );
 
         return;
@@ -54,23 +104,41 @@ function startListening() {
     recognition.start();
 }
 
+/* --------------------------
+   INVIO TESTO
+--------------------------- */
+
 function sendText() {
 
-    const txt =
+    const input =
         document.getElementById("userInput");
 
     const question =
-        txt.value.trim();
+        input.value.trim();
 
-    if (question === "")
+    if (!question)
         return;
 
-    txt.value = "";
+    input.value = "";
 
     askAI(question);
 }
 
+/* --------------------------
+   CHIAMATA GEMINI
+--------------------------- */
+
 async function askAI(question) {
+
+    if (!MODEL_NAME) {
+
+        addMessage(
+            "Modello AI non inizializzato.",
+            "ai"
+        );
+
+        return;
+    }
 
     addMessage(question, "user");
 
@@ -82,7 +150,7 @@ async function askAI(question) {
     try {
 
         const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/${MODEL_NAME}:generateContent?key=${API_KEY}`,
             {
                 method: "POST",
                 headers: {
@@ -111,30 +179,31 @@ ${question}
             }
         );
 
-        console.log("STATUS:", response.status);
+        const data =
+            await response.json();
 
-        const data = await response.json();
-
-        console.log("DATA:", data);
+        console.log(
+            "RISPOSTA GEMINI:",
+            data
+        );
 
         if (!response.ok) {
 
             throw new Error(
                 data?.error?.message ||
-                JSON.stringify(data)
+                "Errore AI"
             );
         }
 
         const answer =
             data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-            "Non sono riuscito a generare una risposta.";
+            "Nessuna risposta ricevuta.";
 
         addMessage(answer, "ai");
 
         speak(answer);
 
-    }
-    catch (error) {
+    } catch (error) {
 
         console.error(error);
 
@@ -144,6 +213,10 @@ ${question}
         );
     }
 }
+
+/* --------------------------
+   VOCE
+--------------------------- */
 
 function speak(text) {
 
@@ -158,7 +231,6 @@ function speak(text) {
     speech.lang = "it-IT";
     speech.rate = 0.95;
     speech.pitch = 0.8;
-    speech.volume = 1;
 
     speech.onend = function () {
 
@@ -170,6 +242,10 @@ function speak(text) {
 
     speechSynthesis.speak(speech);
 }
+
+/* --------------------------
+   CHAT
+--------------------------- */
 
 function addMessage(text, type) {
 
@@ -187,6 +263,10 @@ function addMessage(text, type) {
     box.scrollTop =
         box.scrollHeight;
 }
+
+/* --------------------------
+   GIROSCOPIO
+--------------------------- */
 
 function moveReflection(beta, gamma) {
 
@@ -212,13 +292,14 @@ async function enableMotion() {
         ) {
 
             const permission =
-                await DeviceOrientationEvent.requestPermission();
+                await DeviceOrientationEvent
+                    .requestPermission();
 
             if (permission === "granted") {
 
                 window.addEventListener(
                     "deviceorientation",
-                    function (event) {
+                    event => {
 
                         moveReflection(
                             event.beta || 0,
@@ -232,7 +313,7 @@ async function enableMotion() {
 
             window.addEventListener(
                 "deviceorientation",
-                function (event) {
+                event => {
 
                     moveReflection(
                         event.beta || 0,
@@ -242,9 +323,14 @@ async function enableMotion() {
             );
         }
 
-    }
-    catch (err) {
+    } catch (err) {
 
         console.error(err);
     }
 }
+
+/* --------------------------
+   AVVIO
+--------------------------- */
+
+loadModel();
