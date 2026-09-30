@@ -1,16 +1,60 @@
+const API_KEY = "AQ.Ab8RN6IuTArkLseFUISFtESUnMqjFrub1zZFRxuqO8qGH7Vi1Q";
+
 const eye = document.getElementById("eye");
 const statusText = document.getElementById("status");
 const glare = document.getElementById("glare");
 
-const MAX_HISTORY = 10; // numero massimo di messaggi ricordati (5 scambi)
-const history = [];
-let busy = false;
+let MODEL_NAME = null;
 
 const SpeechRecognition =
     window.SpeechRecognition ||
     window.webkitSpeechRecognition;
 
 let recognition = null;
+
+/* --------------------------
+   CARICA ELENCO MODELLI
+--------------------------- */
+
+async function loadModel() {
+
+    try {
+
+        const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`
+        );
+
+        const data = await response.json();
+
+        console.log("MODELS:", data);
+
+        const model = data.models.find(m =>
+            m.supportedGenerationMethods &&
+            m.supportedGenerationMethods.includes("generateContent")
+        );
+
+        if (!model) {
+
+            throw new Error(
+                "Nessun modello compatibile trovato"
+            );
+        }
+
+        MODEL_NAME = model.name;
+
+        console.log(
+            "MODELLO SELEZIONATO:",
+            MODEL_NAME
+        );
+
+    } catch (err) {
+
+        console.error(err);
+
+        statusText.innerText =
+            "Errore caricamento modelli";
+    }
+}
 
 /* --------------------------
    MICROFONO
@@ -25,41 +69,39 @@ if (SpeechRecognition) {
     recognition.interimResults = false;
 
     recognition.onresult = function (event) {
-        const text = event.results[0][0].transcript;
+
+        const text =
+            event.results[0][0].transcript;
+
         askAI(text);
     };
 
     recognition.onerror = function () {
-        statusText.innerText = "Microfono non disponibile";
-        eye.className = "eye";
-    };
 
-    recognition.onend = function () {
-        // se non è arrivato nessun risultato, torna allo stato normale
-        if (eye.className === "eye listening") {
-            eye.className = "eye";
-            statusText.innerText = "Sistema in attesa...";
-        }
+        statusText.innerText =
+            "Microfono non disponibile";
+
+        eye.className = "eye";
     };
 }
 
 function startListening() {
 
     if (!recognition) {
-        alert("Riconoscimento vocale non disponibile.");
+
+        alert(
+            "Riconoscimento vocale non disponibile."
+        );
+
         return;
     }
 
-    if (busy) return;
+    eye.className = "eye listening";
 
-    try {
-        eye.className = "eye listening";
-        statusText.innerText = "Sto ascoltando...";
-        recognition.start();
-    } catch (err) {
-        // start() genera errore se il microfono è già attivo
-        console.error(err);
-    }
+    statusText.innerText =
+        "Sto ascoltando...";
+
+    recognition.start();
 }
 
 /* --------------------------
@@ -68,84 +110,107 @@ function startListening() {
 
 function sendText() {
 
-    const input = document.getElementById("userInput");
-    const question = input.value.trim();
+    const input =
+        document.getElementById("userInput");
 
-    if (!question) return;
+    const question =
+        input.value.trim();
+
+    if (!question)
+        return;
 
     input.value = "";
 
     askAI(question);
 }
 
-const inputEl = document.getElementById("userInput");
-
-if (inputEl) {
-    inputEl.addEventListener("keydown", event => {
-        if (event.key === "Enter") {
-            event.preventDefault();
-            sendText();
-        }
-    });
-}
-
 /* --------------------------
-   CHIAMATA AL BACKEND (CLAUDE)
+   CHIAMATA GEMINI
 --------------------------- */
 
 async function askAI(question) {
 
-    if (busy) return;
-    busy = true;
+    if (!MODEL_NAME) {
 
-    speechSynthesis.cancel();
+        addMessage(
+            "Modello AI non inizializzato.",
+            "ai"
+        );
+
+        return;
+    }
 
     addMessage(question, "user");
 
     eye.className = "eye";
-    statusText.innerText = "Sto elaborando...";
 
-    history.push({ role: "user", content: question });
+    statusText.innerText =
+        "Sto elaborando...";
 
     try {
 
-        const response = await fetch("/api/chat", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ messages: history })
-        });
+        const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/${MODEL_NAME}:generateContent?key=${API_KEY}`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    contents: [
+                        {
+                            parts: [
+                                {
+                                    text: `
+Sei AIRART AI.
 
-        const data = await response.json();
+Rispondi sempre in italiano.
+
+Mantieni uno stile professionale.
+
+Domanda:
+${question}
+`
+                                }
+                            ]
+                        }
+                    ]
+                })
+            }
+        );
+
+        const data =
+            await response.json();
+
+        console.log(
+            "RISPOSTA GEMINI:",
+            data
+        );
 
         if (!response.ok) {
-            throw new Error(data?.error || "Errore AI");
+
+            throw new Error(
+                data?.error?.message ||
+                "Errore AI"
+            );
         }
 
-        const answer = data.reply || "Nessuna risposta ricevuta.";
-
-        history.push({ role: "assistant", content: answer });
-
-        // mantieni la cronologia corta, sempre a coppie utente/assistente
-        while (history.length > MAX_HISTORY) {
-            history.splice(0, 2);
-        }
+        const answer =
+            data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+            "Nessuna risposta ricevuta.";
 
         addMessage(answer, "ai");
+
         speak(answer);
 
     } catch (error) {
 
         console.error(error);
 
-        history.pop(); // rimuovi la domanda fallita
-
-        addMessage("Errore AI: " + error.message, "ai");
-
-        eye.className = "eye";
-        statusText.innerText = "Errore, riprova";
-
-    } finally {
-        busy = false;
+        addMessage(
+            "Errore AI: " + error.message,
+            "ai"
+        );
     }
 }
 
@@ -156,23 +221,24 @@ async function askAI(question) {
 function speak(text) {
 
     eye.className = "eye speaking";
-    statusText.innerText = "Sto rispondendo...";
 
-    // toglie i simboli markdown per non farli leggere ad alta voce
-    const clean = text.replace(/[*_#`>]/g, "");
+    statusText.innerText =
+        "Sto rispondendo...";
 
-    const speech = new SpeechSynthesisUtterance(clean);
+    const speech =
+        new SpeechSynthesisUtterance(text);
 
     speech.lang = "it-IT";
     speech.rate = 0.95;
     speech.pitch = 0.8;
 
     speech.onend = function () {
-        eye.className = "eye";
-        statusText.innerText = "Sistema in attesa...";
-    };
 
-    speech.onerror = speech.onend;
+        eye.className = "eye";
+
+        statusText.innerText =
+            "Sistema in attesa...";
+    };
 
     speechSynthesis.speak(speech);
 }
@@ -183,16 +249,19 @@ function speak(text) {
 
 function addMessage(text, type) {
 
-    const box = document.getElementById("chatbox");
+    const box =
+        document.getElementById("chatbox");
 
-    const div = document.createElement("div");
+    const div =
+        document.createElement("div");
 
     div.className = type;
     div.textContent = text;
 
     box.appendChild(div);
 
-    box.scrollTop = box.scrollHeight;
+    box.scrollTop =
+        box.scrollHeight;
 }
 
 /* --------------------------
@@ -201,14 +270,16 @@ function addMessage(text, type) {
 
 function moveReflection(beta, gamma) {
 
-    const x = Math.max(-25, Math.min(25, gamma));
-    const y = Math.max(-25, Math.min(25, beta / 3));
+    const x =
+        Math.max(-25,
+            Math.min(25, gamma));
 
-    glare.style.transform = `translate(${x}px,${y}px)`;
-}
+    const y =
+        Math.max(-25,
+            Math.min(25, beta / 3));
 
-function onOrientation(event) {
-    moveReflection(event.beta || 0, event.gamma || 0);
+    glare.style.transform =
+        `translate(${x}px,${y}px)`;
 }
 
 async function enableMotion() {
@@ -220,17 +291,46 @@ async function enableMotion() {
             typeof DeviceOrientationEvent.requestPermission === "function"
         ) {
 
-            const permission = await DeviceOrientationEvent.requestPermission();
+            const permission =
+                await DeviceOrientationEvent
+                    .requestPermission();
 
             if (permission === "granted") {
-                window.addEventListener("deviceorientation", onOrientation);
+
+                window.addEventListener(
+                    "deviceorientation",
+                    event => {
+
+                        moveReflection(
+                            event.beta || 0,
+                            event.gamma || 0
+                        );
+                    }
+                );
             }
 
         } else {
-            window.addEventListener("deviceorientation", onOrientation);
+
+            window.addEventListener(
+                "deviceorientation",
+                event => {
+
+                    moveReflection(
+                        event.beta || 0,
+                        event.gamma || 0
+                    );
+                }
+            );
         }
 
     } catch (err) {
+
         console.error(err);
     }
 }
+
+/* --------------------------
+   AVVIO
+--------------------------- */
+
+loadModel();
