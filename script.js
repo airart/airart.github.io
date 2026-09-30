@@ -1,60 +1,16 @@
-const API_KEY = "AQ.Ab8RN6IuTArkLseFUISFtESUnMqjFrub1zZFRxuqO8qGH7Vi1Q";
-
 const eye = document.getElementById("eye");
 const statusText = document.getElementById("status");
 const glare = document.getElementById("glare");
 
-let MODEL_NAME = null;
+const MAX_HISTORY = 10; // numero massimo di messaggi ricordati (5 scambi)
+const history = [];
+let busy = false;
 
 const SpeechRecognition =
     window.SpeechRecognition ||
     window.webkitSpeechRecognition;
 
 let recognition = null;
-
-/* --------------------------
-   CARICA ELENCO MODELLI
---------------------------- */
-
-async function loadModel() {
-
-    try {
-
-        const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`
-        );
-
-        const data = await response.json();
-
-        console.log("MODELS:", data);
-
-        const model = data.models.find(m =>
-            m.supportedGenerationMethods &&
-            m.supportedGenerationMethods.includes("generateContent")
-        );
-
-        if (!model) {
-
-            throw new Error(
-                "Nessun modello compatibile trovato"
-            );
-        }
-
-        MODEL_NAME = model.name;
-
-        console.log(
-            "MODELLO SELEZIONATO:",
-            MODEL_NAME
-        );
-
-    } catch (err) {
-
-        console.error(err);
-
-        statusText.innerText =
-            "Errore caricamento modelli";
-    }
-}
 
 /* --------------------------
    MICROFONO
@@ -69,39 +25,41 @@ if (SpeechRecognition) {
     recognition.interimResults = false;
 
     recognition.onresult = function (event) {
-
-        const text =
-            event.results[0][0].transcript;
-
+        const text = event.results[0][0].transcript;
         askAI(text);
     };
 
     recognition.onerror = function () {
-
-        statusText.innerText =
-            "Microfono non disponibile";
-
+        statusText.innerText = "Microfono non disponibile";
         eye.className = "eye";
+    };
+
+    recognition.onend = function () {
+        // se non è arrivato nessun risultato, torna allo stato normale
+        if (eye.className === "eye listening") {
+            eye.className = "eye";
+            statusText.innerText = "Sistema in attesa...";
+        }
     };
 }
 
 function startListening() {
 
     if (!recognition) {
-
-        alert(
-            "Riconoscimento vocale non disponibile."
-        );
-
+        alert("Riconoscimento vocale non disponibile.");
         return;
     }
 
-    eye.className = "eye listening";
+    if (busy) return;
 
-    statusText.innerText =
-        "Sto ascoltando...";
-
-    recognition.start();
+    try {
+        eye.className = "eye listening";
+        statusText.innerText = "Sto ascoltando...";
+        recognition.start();
+    } catch (err) {
+        // start() genera errore se il microfono è già attivo
+        console.error(err);
+    }
 }
 
 /* --------------------------
@@ -110,107 +68,84 @@ function startListening() {
 
 function sendText() {
 
-    const input =
-        document.getElementById("userInput");
+    const input = document.getElementById("userInput");
+    const question = input.value.trim();
 
-    const question =
-        input.value.trim();
-
-    if (!question)
-        return;
+    if (!question) return;
 
     input.value = "";
 
     askAI(question);
 }
 
+const inputEl = document.getElementById("userInput");
+
+if (inputEl) {
+    inputEl.addEventListener("keydown", event => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            sendText();
+        }
+    });
+}
+
 /* --------------------------
-   CHIAMATA GEMINI
+   CHIAMATA AL BACKEND (CLAUDE)
 --------------------------- */
 
 async function askAI(question) {
 
-    if (!MODEL_NAME) {
+    if (busy) return;
+    busy = true;
 
-        addMessage(
-            "Modello AI non inizializzato.",
-            "ai"
-        );
-
-        return;
-    }
+    speechSynthesis.cancel();
 
     addMessage(question, "user");
 
     eye.className = "eye";
+    statusText.innerText = "Sto elaborando...";
 
-    statusText.innerText =
-        "Sto elaborando...";
+    history.push({ role: "user", content: question });
 
     try {
 
-        const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/${MODEL_NAME}:generateContent?key=${API_KEY}`,
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    contents: [
-                        {
-                            parts: [
-                                {
-                                    text: `
-Sei AIRART AI.
+        const response = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ messages: history })
+        });
 
-Rispondi sempre in italiano.
-
-Mantieni uno stile professionale.
-
-Domanda:
-${question}
-`
-                                }
-                            ]
-                        }
-                    ]
-                })
-            }
-        );
-
-        const data =
-            await response.json();
-
-        console.log(
-            "RISPOSTA GEMINI:",
-            data
-        );
+        const data = await response.json();
 
         if (!response.ok) {
-
-            throw new Error(
-                data?.error?.message ||
-                "Errore AI"
-            );
+            throw new Error(data?.error || "Errore AI");
         }
 
-        const answer =
-            data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-            "Nessuna risposta ricevuta.";
+        const answer = data.reply || "Nessuna risposta ricevuta.";
+
+        history.push({ role: "assistant", content: answer });
+
+        // mantieni la cronologia corta, sempre a coppie utente/assistente
+        while (history.length > MAX_HISTORY) {
+            history.splice(0, 2);
+        }
 
         addMessage(answer, "ai");
-
         speak(answer);
 
     } catch (error) {
 
         console.error(error);
 
-        addMessage(
-            "Errore AI: " + error.message,
-            "ai"
-        );
+        history.pop(); // rimuovi la domanda fallita
+
+        addMessage("Errore AI: " + error.message, "ai");
+
+        eye.className = "eye";
+        statusText.innerText = "Errore, riprova";
+
+    } finally {
+        busy = false;
     }
 }
 
@@ -221,24 +156,23 @@ ${question}
 function speak(text) {
 
     eye.className = "eye speaking";
+    statusText.innerText = "Sto rispondendo...";
 
-    statusText.innerText =
-        "Sto rispondendo...";
+    // toglie i simboli markdown per non farli leggere ad alta voce
+    const clean = text.replace(/[*_#`>]/g, "");
 
-    const speech =
-        new SpeechSynthesisUtterance(text);
+    const speech = new SpeechSynthesisUtterance(clean);
 
     speech.lang = "it-IT";
     speech.rate = 0.95;
     speech.pitch = 0.8;
 
     speech.onend = function () {
-
         eye.className = "eye";
-
-        statusText.innerText =
-            "Sistema in attesa...";
+        statusText.innerText = "Sistema in attesa...";
     };
+
+    speech.onerror = speech.onend;
 
     speechSynthesis.speak(speech);
 }
@@ -249,19 +183,16 @@ function speak(text) {
 
 function addMessage(text, type) {
 
-    const box =
-        document.getElementById("chatbox");
+    const box = document.getElementById("chatbox");
 
-    const div =
-        document.createElement("div");
+    const div = document.createElement("div");
 
     div.className = type;
     div.textContent = text;
 
     box.appendChild(div);
 
-    box.scrollTop =
-        box.scrollHeight;
+    box.scrollTop = box.scrollHeight;
 }
 
 /* --------------------------
@@ -270,16 +201,14 @@ function addMessage(text, type) {
 
 function moveReflection(beta, gamma) {
 
-    const x =
-        Math.max(-25,
-            Math.min(25, gamma));
+    const x = Math.max(-25, Math.min(25, gamma));
+    const y = Math.max(-25, Math.min(25, beta / 3));
 
-    const y =
-        Math.max(-25,
-            Math.min(25, beta / 3));
+    glare.style.transform = `translate(${x}px,${y}px)`;
+}
 
-    glare.style.transform =
-        `translate(${x}px,${y}px)`;
+function onOrientation(event) {
+    moveReflection(event.beta || 0, event.gamma || 0);
 }
 
 async function enableMotion() {
@@ -291,46 +220,17 @@ async function enableMotion() {
             typeof DeviceOrientationEvent.requestPermission === "function"
         ) {
 
-            const permission =
-                await DeviceOrientationEvent
-                    .requestPermission();
+            const permission = await DeviceOrientationEvent.requestPermission();
 
             if (permission === "granted") {
-
-                window.addEventListener(
-                    "deviceorientation",
-                    event => {
-
-                        moveReflection(
-                            event.beta || 0,
-                            event.gamma || 0
-                        );
-                    }
-                );
+                window.addEventListener("deviceorientation", onOrientation);
             }
 
         } else {
-
-            window.addEventListener(
-                "deviceorientation",
-                event => {
-
-                    moveReflection(
-                        event.beta || 0,
-                        event.gamma || 0
-                    );
-                }
-            );
+            window.addEventListener("deviceorientation", onOrientation);
         }
 
     } catch (err) {
-
         console.error(err);
     }
 }
-
-/* --------------------------
-   AVVIO
---------------------------- */
-
-loadModel();
